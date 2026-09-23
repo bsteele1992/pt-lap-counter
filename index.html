@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lap Counter">
+<meta name="theme-color" content="#0b1220">
+<title>PT Lap Counter</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --card: #152238;
+    --card2: #1c2d48;
+    --text: #f4f7fb;
+    --muted: #9db0c9;
+    --accent: #3dd68c;
+    --warn: #ffb020;
+    --border: #2a3f5f;
+    --tap: #2b6fff;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overscroll-behavior: none;
+  }
+  body {
+    display: flex; flex-direction: column;
+    min-height: 100dvh;
+    padding: calc(12px + var(--safe-top)) 12px calc(12px + var(--safe-bottom));
+  }
+  h1 { font-size: 1.15rem; margin: 0; font-weight: 700; }
+  .sub { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+  header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 10px; margin-bottom: 10px;
+  }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 999px; padding: 6px 10px; font-size: 0.8rem; color: var(--muted);
+  }
+  .pill strong { color: var(--text); }
+  .saved.ok { color: var(--accent); }
+  .saved.warn { color: var(--warn); }
+  .toolbar {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;
+  }
+  button {
+    appearance: none; border: 1px solid var(--border); border-radius: 14px;
+    font: inherit; font-weight: 700; color: var(--text);
+    background: var(--card2); padding: 14px 12px;
+    min-height: 48px; cursor: pointer;
+  }
+  button:active { transform: scale(0.98); }
+  button.primary { background: var(--tap); border-color: #4a82ff; }
+  button.good { background: #174f35; border-color: #2f9e68; }
+  button.danger { background: #4a1d1d; border-color: #8a3535; color: #ffd0d0; }
+  button:disabled { opacity: 0.45; }
+  .screen { display: none; flex: 1; flex-direction: column; min-height: 0; }
+  .screen.active { display: flex; }
+  .panel {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 12px; margin-bottom: 10px;
+  }
+  label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 6px; }
+  input, textarea, select {
+    width: 100%; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 14px; font: inherit; font-size: 1rem;
+  }
+  textarea { min-height: 72px; resize: vertical; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .row3 { display: grid; grid-template-columns: 1.1fr 0.9fr auto; gap: 8px; align-items: end; }
+  .hint { font-size: 0.8rem; color: var(--muted); margin-top: 8px; line-height: 1.35; }
+  .colors {
+    display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 10px;
+  }
+  .swatch {
+    width: 44px; height: 44px; border-radius: 12px; border: 3px solid transparent;
+    padding: 0; min-height: 44px;
+  }
+  .swatch.selected { border-color: #fff; box-shadow: 0 0 0 2px var(--tap); }
+  .swatch.light { border-color: #666; }
+  .swatch.light.selected { border-color: var(--tap); }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+    gap: 8px;
+    overflow: auto;
+    flex: 1;
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .athlete {
+    position: relative;
+    background: var(--card);
+    border: 2px solid var(--border);
+    border-radius: 18px;
+    min-height: 118px;
+    padding: 10px 8px 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px;
+    user-select: none;
+    touch-action: manipulation;
+  }
+  .athlete.done { background: #174f35; border-color: #3dd68c; }
+  .athlete.waiting { opacity: 0.55; }
+  .athlete .jersey {
+    width: 54px; height: 54px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.45rem; font-weight: 800; border: 2px solid rgba(0,0,0,0.25);
+  }
+  .athlete .jersey.darktext { color: #111; }
+  .athlete .jersey.lighttext { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.35); }
+  .athlete .meta { font-size: 0.75rem; color: var(--muted); text-transform: capitalize; }
+  .athlete .laps { font-size: 1.05rem; font-weight: 700; }
+  .athlete .ftime {
+    font-size: 0.95rem; font-weight: 800; color: var(--accent);
+    font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+  }
+  .athlete .bar {
+    width: 80%; height: 6px; border-radius: 99px;
+    background: rgba(255,255,255,0.15); overflow: hidden; margin-top: 4px;
+  }
+  .athlete .bar > span { display: block; height: 100%; background: var(--accent); }
+  .timer-panel {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 12px; margin-bottom: 10px;
+  }
+  .timer-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  }
+  .clock {
+    font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em; line-height: 1;
+  }
+  .clock.running { color: var(--accent); }
+  .clock.stopped { color: var(--warn); }
+  .clock.idle { color: var(--muted); }
+  .timer-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .timer-actions button { min-width: 88px; padding: 12px 10px; }
+  .timer-hint { font-size: 0.8rem; color: var(--muted); margin-top: 8px; line-height: 1.35; }
+  .stats-row {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;
+  }
+  .footer-actions {
+    display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 8px; margin-top: 8px;
+  }
+  .toast {
+    position: fixed; left: 50%; bottom: calc(18px + var(--safe-bottom));
+    transform: translateX(-50%);
+    background: #111827; color: white; border: 1px solid var(--border);
+    padding: 10px 14px; border-radius: 999px; font-size: 0.9rem;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    z-index: 20; max-width: 90vw;
+  }
+  .toast.show { opacity: 1; }
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+    display: none; align-items: flex-end; justify-content: center; z-index: 30;
+    padding: 12px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    width: min(480px, 100%); background: var(--card); border: 1px solid var(--border);
+    border-radius: 18px; padding: 14px; margin-bottom: var(--safe-bottom);
+  }
+  .modal h2 { margin: 0 0 8px; font-size: 1.1rem; }
+  .modal p { margin: 0; color: var(--muted); line-height: 1.4; font-size: 0.95rem; }
+  .modal .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .modal .actions.stack { grid-template-columns: 1fr; }
+  .warnbox {
+    margin: 0 0 10px; padding: 12px; border-radius: 14px;
+    background: #4a1d1d; color: #ffd0d0; border: 1px solid #8a3535; line-height: 1.4;
+  }
+  .roster { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 999px; padding: 6px 8px 6px 6px; font-size: 0.85rem; font-weight: 700;
+  }
+  .chip .dot { width: 18px; height: 18px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.25); }
+  .chip button {
+    min-height: 28px; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem;
+  }
+</style>
+</head>
+<body>
+  <noscript>
+    <div class="warnbox">JavaScript is not running. On iPhone, open this in Safari from a web link (not Notes or Files), then Share → Add to Home Screen.</div>
+  </noscript>
+  <div id="jsDead" class="warnbox">If you still see this red box, this viewer is not running the app. Open it in Safari from a web link, not Notes or Files.</div>
+
+  <header>
+    <div>
+      <h1>PT Lap Counter</h1>
+      <div class="sub" id="subtitle">Color + number · autosaves every tap</div>
+    </div>
+    <div class="pill"><span class="saved ok" id="saveStatus">Saved</span></div>
+  </header>
+
+  <section id="setup" class="screen active">
+    <div class="panel">
+      <label for="targetLaps">Laps required</label>
+      <input id="targetLaps" type="number" inputmode="numeric" min="1" max="99" value="8">
+    </div>
+
+    <div class="panel">
+      <label>Jersey color</label>
+      <div class="colors" id="colorPicker"></div>
+
+      <div class="row3">
+        <div>
+          <label for="bibNum">Number</label>
+          <input id="bibNum" type="number" inputmode="numeric" placeholder="e.g. 5">
+        </div>
+        <div>
+          <label for="bulkBibs">Or several</label>
+          <input id="bulkBibs" inputmode="numeric" placeholder="5, 12, 77">
+        </div>
+        <button type="button" class="primary" id="btnAddAthletes" style="min-width:72px">Add</button>
+      </div>
+      <div class="hint">Example: pick Yellow, type 5, Add — then pick Red, type 5, Add. Yellow 5 and Red 5 are different people.</div>
+      <div class="roster" id="roster"></div>
+      <div class="row" style="margin-top:10px">
+        <button type="button" id="btnClearRoster">Clear list</button>
+        <button type="button" class="primary" id="btnStart">Ready to track</button>
+      </div>
+      <div class="hint">Set up all jerseys first. On the next screen you can wait until they call Start, then start the stopwatch.</div>
+    </div>
+
+    <div class="panel" id="resumePanel" style="display:none">
+      <strong>Saved session found</strong>
+      <div class="hint" id="resumeHint"></div>
+      <div class="row" style="margin-top:10px">
+        <button type="button" class="good" id="btnResume">Resume</button>
+        <button type="button" class="danger" id="btnFresh">Start fresh</button>
+      </div>
+    </div>
+
+    <div class="hint">iPhone: this must open in real Safari (a https link or Home Screen app). Notes/Files preview will not count taps.</div>
+  </section>
+
+  <section id="track" class="screen">
+    <div class="timer-panel">
+      <div class="timer-row">
+        <div>
+          <div class="clock idle" id="raceClock">0:00.0</div>
+          <div class="timer-hint" id="timerHint">Waiting for Start — do not tap laps until the race begins.</div>
+        </div>
+        <div class="timer-actions">
+          <button type="button" class="good" id="btnRaceStart">Start</button>
+          <button type="button" class="danger" id="btnRaceStop" disabled>Stop</button>
+        </div>
+      </div>
+    </div>
+    <div class="toolbar">
+      <button type="button" id="btnUndo" disabled>Undo last</button>
+      <button type="button" id="btnAddOne">+ Jersey</button>
+    </div>
+    <div class="stats-row">
+      <div class="pill">
+        Done <strong id="doneCount">0</strong> / <strong id="totalCount">0</strong>
+        · Target <strong id="targetLabel">8</strong>
+      </div>
+    </div>
+    <div class="grid" id="grid" aria-label="Athletes"></div>
+    <div class="footer-actions">
+      <button type="button" class="primary" id="btnExport">Export</button>
+      <button type="button" id="btnSort">Sort</button>
+      <button type="button" id="btnSetup">Setup</button>
+    </div>
+  </section>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="modal-backdrop" id="addModal">
+    <div class="modal">
+      <h2>Add jersey</h2>
+      <label>Color</label>
+      <div class="colors" id="modalColorPicker"></div>
+      <label for="newBib">Number</label>
+      <input id="newBib" type="number" inputmode="numeric" placeholder="e.g. 14">
+      <div class="actions">
+        <button type="button" id="btnCancelAdd">Cancel</button>
+        <button type="button" class="primary" id="btnConfirmAdd">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="exportModal">
+    <div class="modal">
+      <h2>Results</h2>
+      <textarea id="exportOut" readonly style="min-height:180px;font-family:ui-monospace,monospace;font-size:0.85rem"></textarea>
+      <div class="actions">
+        <button type="button" id="btnCopyExport">Copy</button>
+        <button type="button" class="primary" id="btnCloseExport">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="stopModal">
+    <div class="modal">
+      <h2>Stop the timer?</h2>
+      <p>This freezes the race clock. Finish times already recorded stay saved. The stopwatch will not keep running until you start a new race.</p>
+      <div class="actions">
+        <button type="button" id="btnCancelStop">Keep running</button>
+        <button type="button" class="danger" id="btnConfirmStop">Yes, stop timer</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  const STORAGE_KEY = 'pt-lap-counter-v3';
+  const COLORS = [
+    { id: 'red', label: 'Red', hex: '#e53935', text: 'light' },
+    { id: 'yellow', label: 'Yellow', hex: '#f6c343', text: 'dark' },
+    { id: 'blue', label: 'Blue', hex: '#1e88e5', text: 'light' },
+    { id: 'green', label: 'Green', hex: '#43a047', text: 'light' },
+    { id: 'orange', label: 'Orange', hex: '#fb8c00', text: 'dark' },
+    { id: 'purple', label: 'Purple', hex: '#8e24aa', text: 'light' },
+    { id: 'white', label: 'White', hex: '#f5f5f5', text: 'dark' },
+    { id: 'black', label: 'Black', hex: '#212121', text: 'light' },
+    { id: 'pink', label: 'Pink', hex: '#ec407a', text: 'light' },
+    { id: 'gray', label: 'Gray', hex: '#78909c', text: 'light' },
+  ];
+
+  const $ = (id) => document.getElementById(id);
+  const colorMap = Object.fromEntries(COLORS.map((c) => [c.id, c]));
+
+  const state = {
+    target: 8,
+    selectedColor: 'red',
+    modalColor: 'red',
+    athletes: [], // {id, color, bib, laps, finishMs|null}
+    undo: [],
+    sortMode: 'color', // color | progress | bib | finish
+    raceStatus: 'idle', // idle | running | stopped
+    raceStartedAt: null, // wall clock ms when Start pressed
+    raceElapsedMs: 0, // frozen elapsed when stopped
+  };
+
+  let clockTimer = null;
+
+  function athleteId(color, bib) {
+    return color + ':' + bib;
+  }
+
+  function toast(msg) {
+    const el = $('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => el.classList.remove('show'), 1800);
+  }
+
+  function setSaved(ok) {
+    const el = $('saveStatus');
+    el.textContent = ok ? 'Saved' : 'Saving…';
+    el.className = 'saved ' + (ok ? 'ok' : 'warn');
+  }
+
+  function formatTime(ms) {
+    if (ms == null || !Number.isFinite(ms) || ms < 0) return '—';
+    const totalTenths = Math.floor(ms / 100);
+    const tenths = totalTenths % 10;
+    const totalSec = Math.floor(totalTenths / 10);
+    const s = totalSec % 60;
+    const m = Math.floor(totalSec / 60);
+    return m + ':' + String(s).padStart(2, '0') + '.' + tenths;
+  }
+
+  function elapsedNow() {
+    if (state.raceStatus === 'running' && state.raceStartedAt) {
+      return Math.max(0, Date.now() - state.raceStartedAt);
+    }
+    if (state.raceStatus === 'stopped') return state.raceElapsedMs || 0;
+    return 0;
+  }
+
+  function persist() {
+    setSaved(false);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        target: state.target,
+        athletes: state.athletes,
+        undo: state.undo.slice(-50),
+        raceStatus: state.raceStatus,
+        raceStartedAt: state.raceStartedAt,
+        raceElapsedMs: state.raceStatus === 'running' ? elapsedNow() : state.raceElapsedMs,
+        updatedAt: Date.now(),
+      }));
+      setSaved(true);
+    } catch (e) {
+      setSaved(false);
+      toast('Could not save');
+    }
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('pt-lap-counter-v2');
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  function parseNums(text) {
+    return [...new Set(
+      String(text || '').split(/[^0-9]+/).filter(Boolean)
+        .map((p) => parseInt(p, 10))
+        .filter((n) => Number.isFinite(n) && n >= 0 && n <= 9999)
+    )];
+  }
+
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'));
+    $(id).classList.add('active');
+    if (id === 'track') {
+      updateTimerUI();
+      startClockLoop();
+    } else {
+      stopClockLoop();
+    }
+  }
+
+  function vibrate(ms) {
+    try { if (navigator.vibrate) navigator.vibrate(ms); } catch {}
+  }
+
+  function updateTimerUI() {
+    const clock = $('raceClock');
+    const hint = $('timerHint');
+    const startBtn = $('btnRaceStart');
+    const stopBtn = $('btnRaceStop');
+    const ms = elapsedNow();
+    clock.textContent = formatTime(ms);
+
+    clock.classList.remove('idle', 'running', 'stopped');
+    if (state.raceStatus === 'running') {
+      clock.classList.add('running');
+      hint.textContent = 'Race running — tap a jersey for +1 lap. 8th lap stores their finish time.';
+      startBtn.disabled = true;
+      startBtn.textContent = 'Running';
+      stopBtn.disabled = false;
+    } else if (state.raceStatus === 'stopped') {
+      clock.classList.add('stopped');
+      hint.textContent = 'Timer stopped. Finish times are saved. Export when ready, or Setup for a new heat.';
+      startBtn.disabled = false;
+      startBtn.textContent = 'Start new';
+      stopBtn.disabled = true;
+    } else {
+      clock.classList.add('idle');
+      hint.textContent = 'Waiting for Start — do not tap laps until they call start.';
+      startBtn.disabled = false;
+      startBtn.textContent = 'Start';
+      stopBtn.disabled = true;
+    }
+  }
+
+  function startClockLoop() {
+    stopClockLoop();
+    clockTimer = setInterval(() => {
+      if (state.raceStatus === 'running') updateTimerUI();
+    }, 100);
+    updateTimerUI();
+  }
+
+  function stopClockLoop() {
+    if (clockTimer) {
+      clearInterval(clockTimer);
+      clockTimer = null;
+    }
+  }
+
+  function renderColorPickers() {
+    function fill(containerId, selectedKey) {
+      const box = $(containerId);
+      box.innerHTML = '';
+      COLORS.forEach((c) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'swatch' + (c.id === state[selectedKey] ? ' selected' : '') + (c.text === 'dark' ? ' light' : '');
+        b.style.background = c.hex;
+        b.title = c.label;
+        b.setAttribute('aria-label', c.label);
+        b.addEventListener('click', () => {
+          state[selectedKey] = c.id;
+          renderColorPickers();
+        });
+        box.appendChild(b);
+      });
+    }
+    fill('colorPicker', 'selectedColor');
+    fill('modalColorPicker', 'modalColor');
+  }
+
+  function renderRoster() {
+    const box = $('roster');
+    box.innerHTML = '';
+    if (!state.athletes.length) {
+      box.innerHTML = '<span class="hint" style="margin:0">No athletes yet.</span>';
+      return;
+    }
+    state.athletes
+      .slice()
+      .sort((a, b) => a.color.localeCompare(b.color) || a.bib - b.bib)
+      .forEach((a) => {
+        const c = colorMap[a.color] || COLORS[0];
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.innerHTML = '<span class="dot" style="background:' + c.hex + '"></span>' +
+          c.label + ' ' + a.bib;
+        const rm = document.createElement('button');
+        rm.type = 'button';
+        rm.textContent = '×';
+        rm.addEventListener('click', () => {
+          state.athletes = state.athletes.filter((x) => x.id !== a.id);
+          persist();
+          renderRoster();
+        });
+        chip.appendChild(rm);
+        box.appendChild(chip);
+      });
+  }
+
+  function sortedAthletes() {
+    const list = state.athletes.slice();
+    if (state.sortMode === 'progress') {
+      list.sort((a, b) => (b.laps - a.laps) || a.color.localeCompare(b.color) || (a.bib - b.bib));
+    } else if (state.sortMode === 'bib') {
+      list.sort((a, b) => (a.bib - b.bib) || a.color.localeCompare(b.color));
+    } else if (state.sortMode === 'finish') {
+      list.sort((a, b) => {
+        const af = a.finishMs == null ? Number.POSITIVE_INFINITY : a.finishMs;
+        const bf = b.finishMs == null ? Number.POSITIVE_INFINITY : b.finishMs;
+        return af - bf || a.color.localeCompare(b.color) || (a.bib - b.bib);
+      });
+    } else {
+      list.sort((a, b) => a.color.localeCompare(b.color) || (a.bib - b.bib));
+    }
+    return list;
+  }
+
+  function labelFor(a) {
+    const c = colorMap[a.color];
+    return (c ? c.label : a.color) + ' ' + a.bib;
+  }
+
+  function renderTrack() {
+    const grid = $('grid');
+    grid.innerHTML = '';
+    const list = sortedAthletes();
+    let done = 0;
+    const waiting = state.raceStatus === 'idle';
+    list.forEach((a) => {
+      if (a.laps >= state.target) done += 1;
+      const c = colorMap[a.color] || { hex: '#888', text: 'light', label: a.color };
+      const finished = a.laps >= state.target;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'athlete' + (finished ? ' done' : '') + (waiting ? ' waiting' : '');
+      const timeBit = finished && a.finishMs != null ? ', finished ' + formatTime(a.finishMs) : '';
+      btn.setAttribute('aria-label', labelFor(a) + ', ' + a.laps + ' of ' + state.target + timeBit);
+      const pct = Math.min(100, Math.round((a.laps / state.target) * 100));
+      let extra = '';
+      if (finished && a.finishMs != null) {
+        extra = '<div class="ftime">' + formatTime(a.finishMs) + '</div>';
+      } else {
+        extra = '<div class="laps">' + a.laps + ' / ' + state.target + '</div>';
+      }
+      btn.innerHTML =
+        '<div class="jersey ' + (c.text === 'dark' ? 'darktext' : 'lighttext') + '" style="background:' + c.hex + '">' + a.bib + '</div>' +
+        '<div class="meta">' + c.label + '</div>' +
+        extra +
+        (finished && a.finishMs != null ? '<div class="laps" style="font-size:0.8rem;color:var(--muted)">' + a.laps + ' / ' + state.target + '</div>' : '') +
+        '<div class="bar"><span style="width:' + pct + '%"></span></div>';
+      btn.addEventListener('click', () => addLap(a.id));
+      let pressTimer = null;
+      btn.addEventListener('touchstart', () => {
+        pressTimer = setTimeout(() => { pressTimer = null; subtractLap(a.id); }, 550);
+      }, { passive: true });
+      btn.addEventListener('touchend', () => { if (pressTimer) clearTimeout(pressTimer); });
+      btn.addEventListener('touchmove', () => { if (pressTimer) clearTimeout(pressTimer); });
+      grid.appendChild(btn);
+    });
+    $('doneCount').textContent = String(done);
+    $('totalCount').textContent = String(state.athletes.length);
+    $('targetLabel').textContent = String(state.target);
+    $('btnUndo').disabled = state.undo.length === 0;
+    if (state.raceStatus === 'running') {
+      $('subtitle').textContent = 'Tap +1 · hold −1 · finish time on 8th lap';
+    } else if (state.raceStatus === 'stopped') {
+      $('subtitle').textContent = 'Timer stopped · export results when ready';
+    } else {
+      $('subtitle').textContent = 'Press Start when they begin running';
+    }
+    updateTimerUI();
+  }
+
+  function addAthletes(color, nums) {
+    let added = 0;
+    let skipped = 0;
+    nums.forEach((bib) => {
+      const id = athleteId(color, bib);
+      if (state.athletes.some((a) => a.id === id)) {
+        skipped += 1;
+        return;
+      }
+      state.athletes.push({ id, color, bib, laps: 0, finishMs: null });
+      added += 1;
+    });
+    persist();
+    renderRoster();
+    if (added) toast('Added ' + added);
+    if (skipped) toast((added ? 'Added ' + added + ', ' : '') + skipped + ' already listed');
+    return added;
+  }
+
+  function addLap(id) {
+    if (state.raceStatus !== 'running') {
+      toast(state.raceStatus === 'stopped' ? 'Timer is stopped' : 'Press Start first');
+      vibrate(30);
+      return;
+    }
+    const a = state.athletes.find((x) => x.id === id);
+    if (!a) return;
+    if (a.laps >= state.target) {
+      toast(labelFor(a) + ' ' + (a.finishMs != null ? formatTime(a.finishMs) : 'finished'));
+      vibrate(20);
+      return;
+    }
+    state.undo.push({
+      id,
+      prevLaps: a.laps,
+      prevFinishMs: a.finishMs,
+    });
+    a.laps += 1;
+    if (a.laps >= state.target) {
+      a.finishMs = elapsedNow();
+      vibrate([20, 40, 20]);
+      toast(labelFor(a) + ' ' + formatTime(a.finishMs));
+    } else {
+      vibrate(12);
+    }
+    persist();
+    renderTrack();
+  }
+
+  function subtractLap(id) {
+    if (state.raceStatus === 'idle') {
+      toast('Press Start first');
+      return;
+    }
+    const a = state.athletes.find((x) => x.id === id);
+    if (!a || a.laps <= 0) {
+      toast('Already at 0');
+      return;
+    }
+    state.undo.push({
+      id,
+      prevLaps: a.laps,
+      prevFinishMs: a.finishMs,
+    });
+    a.laps -= 1;
+    a.finishMs = null;
+    vibrate(25);
+    persist();
+    renderTrack();
+    toast(labelFor(a) + ' −1');
+  }
+
+  function undo() {
+    const last = state.undo.pop();
+    if (!last) return;
+    const a = state.athletes.find((x) => x.id === last.id);
+    if (a) {
+      a.laps = last.prevLaps;
+      a.finishMs = last.prevFinishMs;
+    }
+    vibrate(18);
+    persist();
+    renderTrack();
+    toast('Undid');
+  }
+
+  function resetRaceClock(keepLaps) {
+    state.raceStatus = 'idle';
+    state.raceStartedAt = null;
+    state.raceElapsedMs = 0;
+    if (!keepLaps) {
+      state.athletes.forEach((a) => {
+        a.laps = 0;
+        a.finishMs = null;
+      });
+      state.undo = [];
+    }
+  }
+
+  function startRace() {
+    if (state.raceStatus === 'running') return;
+    if (state.raceStatus === 'stopped') {
+      // Start new heat: clear laps and times
+      state.athletes.forEach((a) => {
+        a.laps = 0;
+        a.finishMs = null;
+      });
+      state.undo = [];
+    }
+    state.raceStatus = 'running';
+    state.raceStartedAt = Date.now();
+    state.raceElapsedMs = 0;
+    persist();
+    renderTrack();
+    vibrate([15, 30, 15]);
+    toast('Race started');
+  }
+
+  function stopRace() {
+    if (state.raceStatus !== 'running') return;
+    state.raceElapsedMs = elapsedNow();
+    state.raceStatus = 'stopped';
+    state.raceStartedAt = null;
+    persist();
+    renderTrack();
+    toast('Timer stopped');
+  }
+
+  function startTracking() {
+    state.target = Math.max(1, Math.min(99, parseInt($('targetLaps').value, 10) || 8));
+    if (!state.athletes.length) {
+      toast('Add athletes first');
+      alert('Add at least one color + number first.');
+      return;
+    }
+    persist();
+    showScreen('track');
+    renderTrack();
+    toast(state.athletes.length + ' ready — wait for Start');
+  }
+
+  function exportResults() {
+    const lines = ['color,bib,laps,target,finish_time,finish_ms,status'];
+    sortedAthletes().forEach((a) => {
+      const status = a.laps >= state.target ? 'done' : 'in_progress';
+      const ft = a.finishMs != null ? formatTime(a.finishMs) : '';
+      const fms = a.finishMs != null ? a.finishMs : '';
+      lines.push([a.color, a.bib, a.laps, state.target, ft, fms, status].join(','));
+    });
+    lines.push('');
+    lines.push('Race clock: ' + formatTime(elapsedNow()) + ' (' + state.raceStatus + ')');
+    lines.push('Finished: ' + state.athletes.filter((a) => a.laps >= state.target).length + '/' + state.athletes.length);
+    $('exportOut').value = lines.join('\n');
+    $('exportModal').classList.add('open');
+  }
+
+  // Events
+  $('btnAddAthletes').addEventListener('click', () => {
+    const single = parseNums($('bibNum').value);
+    const bulk = parseNums($('bulkBibs').value);
+    const nums = [...new Set(single.concat(bulk))];
+    if (!nums.length) {
+      toast('Enter a number');
+      return;
+    }
+    addAthletes(state.selectedColor, nums);
+    $('bibNum').value = '';
+    $('bulkBibs').value = '';
+    $('bibNum').focus();
+  });
+  $('bibNum').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') $('btnAddAthletes').click();
+  });
+  $('btnClearRoster').addEventListener('click', () => {
+    state.athletes = [];
+    state.undo = [];
+    resetRaceClock(true);
+    persist();
+    renderRoster();
+  });
+  $('btnStart').addEventListener('click', startTracking);
+  $('btnResume').addEventListener('click', () => {
+    showScreen('track');
+    renderTrack();
+  });
+  $('btnFresh').addEventListener('click', () => {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem('pt-lap-counter-v2');
+    state.athletes = [];
+    state.undo = [];
+    resetRaceClock(true);
+    $('resumePanel').style.display = 'none';
+    renderRoster();
+    toast('Cleared');
+  });
+  $('btnUndo').addEventListener('click', undo);
+  $('btnRaceStart').addEventListener('click', () => {
+    if (state.raceStatus === 'stopped') {
+      if (!confirm('Start a new race? This clears lap counts and finish times for everyone.')) return;
+    }
+    startRace();
+  });
+  $('btnRaceStop').addEventListener('click', () => {
+    $('stopModal').classList.add('open');
+  });
+  $('btnCancelStop').addEventListener('click', () => $('stopModal').classList.remove('open'));
+  $('btnConfirmStop').addEventListener('click', () => {
+    $('stopModal').classList.remove('open');
+    stopRace();
+  });
+  $('btnAddOne').addEventListener('click', () => {
+    state.modalColor = state.selectedColor;
+    renderColorPickers();
+    $('newBib').value = '';
+    $('addModal').classList.add('open');
+  });
+  $('btnCancelAdd').addEventListener('click', () => $('addModal').classList.remove('open'));
+  $('btnConfirmAdd').addEventListener('click', () => {
+    const nums = parseNums($('newBib').value);
+    if (!nums.length) { toast('Enter a number'); return; }
+    const added = addAthletes(state.modalColor, nums);
+    $('addModal').classList.remove('open');
+    if (added) renderTrack();
+  });
+  $('btnExport').addEventListener('click', exportResults);
+  $('btnCopyExport').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText($('exportOut').value);
+      toast('Copied');
+    } catch {
+      $('exportOut').select();
+      toast('Select and copy');
+    }
+  });
+  $('btnCloseExport').addEventListener('click', () => $('exportModal').classList.remove('open'));
+  $('btnSort').addEventListener('click', () => {
+    const order = ['color', 'progress', 'bib', 'finish'];
+    const i = order.indexOf(state.sortMode);
+    state.sortMode = order[(i + 1) % order.length];
+    renderTrack();
+    toast('Sort: ' + state.sortMode);
+  });
+  $('btnSetup').addEventListener('click', () => {
+    $('targetLaps').value = String(state.target);
+    showScreen('setup');
+    renderRoster();
+    const saved = load();
+    if (saved && saved.athletes && saved.athletes.length) {
+      $('resumePanel').style.display = 'block';
+      $('resumeHint').textContent = saved.athletes.length + ' athletes · last saved ' + new Date(saved.updatedAt || Date.now()).toLocaleString();
+    }
+  });
+
+  document.addEventListener('gesturestart', (e) => e.preventDefault());
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && state.raceStatus === 'running') updateTimerUI();
+  });
+
+  // Boot
+  const dead = $('jsDead');
+  if (dead) dead.remove();
+  renderColorPickers();
+
+  const saved = load();
+  if (saved && Array.isArray(saved.athletes) && saved.athletes.length) {
+    state.target = saved.target || 8;
+    state.athletes = saved.athletes.map((a) => {
+      const color = a.color || 'red';
+      const bib = Number(a.bib);
+      return {
+        id: a.id || athleteId(color, bib),
+        color,
+        bib,
+        laps: Math.max(0, Number(a.laps) || 0),
+        finishMs: a.finishMs == null ? null : Number(a.finishMs),
+      };
+    });
+    state.undo = Array.isArray(saved.undo) ? saved.undo : [];
+    state.raceStatus = saved.raceStatus || 'idle';
+    state.raceStartedAt = saved.raceStartedAt || null;
+    state.raceElapsedMs = Number(saved.raceElapsedMs) || 0;
+    // If page reloaded mid-race, keep running from original start time
+    if (state.raceStatus === 'running' && state.raceStartedAt) {
+      // ok
+    } else if (state.raceStatus === 'running' && !state.raceStartedAt && state.raceElapsedMs) {
+      // recover approximate start from elapsed snapshot
+      state.raceStartedAt = Date.now() - state.raceElapsedMs;
+    }
+    $('targetLaps').value = String(state.target);
+    $('resumePanel').style.display = 'block';
+    $('resumeHint').textContent = state.athletes.length + ' athletes · last saved ' + new Date(saved.updatedAt || Date.now()).toLocaleString();
+  }
+  renderRoster();
+})();
+</script>
+</body>
+</html>
